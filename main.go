@@ -4,9 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-
 	"log"
 	"net/http"
+
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -48,13 +49,13 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	db := setupDatabase()
 	defer db.Close()
 
-	//hash password
+	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
 		return
 	}
-	user.Password = string(hashedPassword)
+	user.Password = string(hashedPassword) // Simpan hash ke database
 
 	if err := registerUser(db, user); err != nil {
 		http.Error(w, "Error registering user", http.StatusConflict)
@@ -86,14 +87,24 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	db := setupDatabase()
 	defer db.Close()
 
+	// Pastikan variabel storedUser dideklarasikan di sini
 	storedUser, err := getUserByUsername(db, user.Username)
-	if err != nil || storedUser.Password != user.Password {
+	if err != nil {
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
 
+	// Debugging untuk memeriksa nilai storedUser
+	fmt.Println("Stored User:", storedUser)
+
+	// storedUser, err := getUserByUsername(db, user.Username)
+	// if err != nil || !checkPasswordHash(user.Password, storedUser.Password) {
+	// 	http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+	// 	return
+	// }
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"username": user.Username,
+		"username": storedUser.Username,
 		"exp":      time.Now().Add(time.Hour * 72).Unix(),
 	})
 	tokenString, err := token.SignedString([]byte("your_secret_key"))
@@ -101,10 +112,12 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not create token", http.StatusInternalServerError)
 		return
 	}
-	fmt.Println("Generated token:", tokenString)
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"token": tokenString,
+		"user":  storedUser,
+	})
 }
 
 func getUserByUsername(db *sql.DB, username string) (User, error) {
@@ -113,9 +126,44 @@ func getUserByUsername(db *sql.DB, username string) (User, error) {
 	return user, err
 }
 
-func checkPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
+// func checkPasswordHash(password, hash string) bool {
+// 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+// 	return err == nil
+// }
+
+// Middleware untuk verifikasi token
+func verifyToken(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Ambil token dari header Authorization
+		tokenString := r.Header.Get("Authorization")
+		if tokenString == "" {
+			http.Error(w, "Token is missing", http.StatusUnauthorized)
+			return
+		}
+
+		// Menghilangkan "Bearer " jika ada di depan token
+		parts := strings.Split(tokenString, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Invalid token format", http.StatusUnauthorized)
+			return
+		}
+		tokenString = parts[1]
+
+		// Verifikasi token
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte("your_secret_key"), nil // Kunci rahasia yang sama dengan saat pembuatan token
+		})
+		if err != nil || !token.Valid {
+			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+			return
+		}
+
+		// Token valid, lanjutkan ke handler berikutnya
+		next.ServeHTTP(w, r)
+	})
 }
 
 func main() {
@@ -125,6 +173,7 @@ func main() {
 	http.HandleFunc("/register", registerHandler)
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/booking", bookingHandler)
+	http.HandleFunc("/occupied-seats", getOccupiedSeatsHandler)
 
 	fmt.Println("Server is running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", corsHandler))
