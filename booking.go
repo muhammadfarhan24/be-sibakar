@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // Booking struct
@@ -15,10 +16,59 @@ type Booking struct {
 	Status       string `json:"status"`
 }
 
+func resetSeatToAvailable(db *sql.DB) error {
+	_, err := db.Exec(`
+	UPDATE bookings
+	SET status = 'available'
+	WHERE status = 'occupied'`)
+	if err != nil {
+		return fmt.Errorf("failer to reset seats to available: %v", err)
+	}
+	return nil
+}
+func scheduleSeatReset(db *sql.DB) {
+	go func() {
+		for {
+			currentTime := time.Now()
+
+			resetHour := 20
+			nextReset := time.Date(currentTime.Year(), currentTime.Month(), currentTime.Day(), resetHour, 0, 0, 0, time.Local)
+
+			if currentTime.After(nextReset) {
+				nextReset = nextReset.Add(24 * time.Hour)
+			}
+			waitDuration := nextReset.Sub(currentTime)
+			fmt.Printf("Waiting for %v until next reset at 8 malam..\n", waitDuration)
+
+			time.Sleep(waitDuration)
+
+			if err := resetSeatToAvailable(db); err != nil {
+				fmt.Printf("Error resetting seats: %v\n", err)
+			} else {
+				fmt.Println("Seats have been reset to available")
+			}
+		}
+	}()
+}
+
+func isBookingTimeValid() bool {
+	currentTime := time.Now()
+	startHour := 7 // Jam mulai (8 pagi)
+	endHour := 20  // Jam selesai (8 malam)
+
+	// Cek apakah jam sekarang berada dalam rentang jam 8 hingga jam 20
+	return currentTime.Hour() >= startHour && currentTime.Hour() < endHour
+}
+
 // Booking handler
 func bookingHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !isBookingTimeValid() {
+		http.Error(w, "Booking hanya dapat dilakukan antara jam 8 pagi hingga 8 malam.", http.StatusForbidden)
 		return
 	}
 
