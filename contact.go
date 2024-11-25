@@ -25,7 +25,7 @@ func saveContact(db *sql.DB, contact Contact) error {
 	return err
 }
 func getContacts(db *sql.DB) ([]Contact, error) {
-	rows, err := db.Query("SELECT id, first_name, last_name, email, phone, message FROM contacts")
+	rows, err := db.Query("SELECT first_name, last_name, email, phone, message FROM contacts")
 	if err != nil {
 		return nil, err
 	}

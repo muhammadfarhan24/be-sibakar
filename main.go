@@ -336,6 +336,7 @@ func main() {
 	http.HandleFunc("/admin/users", verifyAdminRole(getUsersHandler))
 
 	http.HandleFunc("/contact", ContactHandler)
+	http.HandleFunc("/api/contact", getContactsHandlers)
 
 	fmt.Println("Server is running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", corsHandler))
