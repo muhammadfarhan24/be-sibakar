@@ -8,4 +8,5 @@ require (
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/rs/cors v1.11.1
 	golang.org/x/crypto v0.28.0
+	golang.org/x/tools v0.27.0
 )

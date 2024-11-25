@@ -335,6 +335,8 @@ func main() {
 	// Endpoint yang hanya bisa diakses oleh admin
 	http.HandleFunc("/admin/users", verifyAdminRole(getUsersHandler))
 
+	http.HandleFunc("/contact", ContactHandler)
+
 	fmt.Println("Server is running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", corsHandler))
 }
