@@ -317,22 +317,53 @@ func verifyAdminRole(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func main() {
-	corsHandler := cors.Default().Handler(http.DefaultServeMux)
+	// Konfigurasi CORS dengan lebih banyak opsi
+	corsHandler := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173"}, // Ganti dengan domain frontend Anda
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+		Debug:            true,
+	}).Handler(http.DefaultServeMux)
+
+	// Menambahkan route untuk event dengan metode HTTP yang berbeda
+	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			createEventHandler(w, r) // POST untuk membuat event
+		} else if r.Method == http.MethodGet {
+			getEventsHandler(w, r) // GET untuk mengambil semua event
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // Menghandle metode yang tidak diizinkan
+		}
+	})
+
+	// Route untuk menghapus event
+	http.HandleFunc("/events/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleteEventHandler(w, r) // DELETE untuk menghapus event
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // Menghandle metode yang tidak diizinkan
+		}
+	})
+
+	// Route untuk memperbarui event
+	http.HandleFunc("/events/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			updateEventHandler(w, r) // PUT untuk memperbarui event
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // Menghandle metode yang tidak diizinkan
+		}
+	})
 
 	// Menambahkan route
 	http.HandleFunc("/register", registerHandler)
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/booking", bookingHandler)
 	http.HandleFunc("/occupied-seats", getOccupiedSeatsHandler)
-	// Penambahan route baru untuk mendapatkan data pengguna
 	http.HandleFunc("/users", getUsersHandler)
-	// Route untuk handler delete user
 	http.HandleFunc("/users/delete", deleteUserHandler)
-	// Route handler logactivity
 	http.HandleFunc("/logactivity", getLogActivityHandler)
-	// Route delete log
 	http.HandleFunc("/logactivity/delete", deleteLogActivityHandler)
-	// Endpoint yang hanya bisa diakses oleh admin
 	http.HandleFunc("/admin/users", verifyAdminRole(getUsersHandler))
 
 	http.HandleFunc("/contact", ContactHandler)
