@@ -207,16 +207,23 @@ func deleteUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logID := r.URL.Query().Get("id")
+	if logID == "" {
+		http.Error(w, "Log activity ID is required", http.StatusBadRequest)
+		return
+	}
+
 	db := setupDatabase()
 	defer db.Close()
 
-	_, err := db.Exec("DELETE FROM users WHERE id = ?", userID)
+	_, err := db.Exec("DELETE FROM logactivity WHERE id = ?", logID)
 	if err != nil {
 		http.Error(w, "Failed to delete user", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Log activity deleted successfully"))
 }
 
 // Handler untuk kirim data dari tabel logactivity
